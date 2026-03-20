@@ -65,7 +65,7 @@ Word count accuracy is critical — being too short (under 3,400) or too long (o
 
 READER PROFILE:
 - Japanese business professional, early-to-mid career
-- English level: {level} (CEFR B2) — can handle real business English, not ESL-simplified
+- English level: {level} (CEFR B1-B2) — clear and direct language, building a daily reading habit
 - Reads every morning commute to improve reading speed AND stay informed
 - Motivated by practical knowledge they can use at work
 
@@ -93,7 +93,12 @@ STRUCTURE — follow exactly:
 - Concrete numbers, company names, and data points where relevant
 - Analysis, not just facts — what does this mean?
 - Implications for Japanese professionals
-- 1,750-1,850 words]
+- 1,650-1,750 words]
+
+### Sources
+- [Publication Name — Section/Topic](https://url) — *Month YYYY*
+- [Publication Name — Section/Topic](https://url) — *Month YYYY*
+- [Publication Name — Section/Topic](https://url) — *Month YYYY*
 
 ---
 
@@ -103,7 +108,11 @@ STRUCTURE — follow exactly:
 - Specific, actionable insights
 - Real examples and case studies
 - Clear takeaways for someone who wants to act on this information
-- 1,150-1,250 words]
+- 1,050-1,150 words]
+
+### Sources
+- [Publication Name — Section/Topic](https://url) — *Month YYYY*
+- [Publication Name — Section/Topic](https://url) — *Month YYYY*
 
 ---
 
@@ -111,22 +120,25 @@ STRUCTURE — follow exactly:
 
 **[Short item 1 title]**
 [90-110 words on topic from: {quick_take_topics}. One sharp insight.]
+*Source: [Publication](https://url) — Month YYYY*
 
 **[Short item 2 title]**
 [90-110 words on a different aspect of the same area or adjacent topic.]
+*Source: [Publication](https://url) — Month YYYY*
 
 **[Short item 3 title]**
 [90-110 words. Can be a Japan-specific angle on a global story.]
+*Source: [Publication](https://url) — Month YYYY*
 
 ---
 
 ## 📖 Word of the Day
 
-**[Advanced business/finance/tech vocabulary word]**
+**[Useful business/finance/tech vocabulary word]**
 
 *[Part of speech] | [Pronunciation guide] | Origin: [etymology in one sentence]*
 
-**Definition:** [Clear, precise definition in 1-2 sentences]
+**Definition:** [Clear, simple definition in 1-2 sentences]
 
 **In context:**
 1. "[Example sentence from a news/business context]"
@@ -138,13 +150,23 @@ STRUCTURE — follow exactly:
 ---
 
 STYLE RULES:
-- Write like The Economist meets Bloomberg Businessweek — authoritative but readable
+- Use plain, clear English — CEFR B1-B2 level
+- Choose simple, common words: "use" not "utilize", "show" not "demonstrate", "buy" not "procure"
+- Keep sentences short and direct: aim for 15-20 words on average
 - No bullet points in Main Story or Second Story — use flowing prose paragraphs
 - Paragraphs: 3-5 sentences, strong opening sentence each time
-- Vary sentence rhythm: mix punchy short sentences with complex longer ones
-- Active voice by default; passive only when the subject is unknown
+- Active voice throughout
 - No hedging language like "it could be argued" or "some might say"
 - Reference real organizations, people, and events from 2025-early 2026
+
+SOURCE REQUIREMENTS:
+- Base all news content on reporting from these trusted sources:
+  NHK World (nhk.or.jp/nhkworld), Reuters (reuters.com), Bloomberg (bloomberg.com),
+  Nikkei Asia (asia.nikkei.com), Japanese government sites (e.g. cao.go.jp, meti.go.jp, mofa.go.jp),
+  Bank of Japan (boj.or.jp), IMF (imf.org), World Bank (worldbank.org)
+- Every Sources section must use real, working URLs from these publications
+- Include the month and year of the source material so the reader knows how current it is
+- Prioritize the most recent information available (late 2025 or early 2026)
 
 FINAL LINE (do not include in the report body, just add at the very end):
 WORD_COUNT: [integer count of words in the entire report body above]"""
@@ -426,16 +448,17 @@ def _rich_text(text: str, bold: bool = False, italic: bool = False) -> dict:
 
 
 def _parse_inline(text: str) -> list[dict]:
-    """Convert inline **bold** / *italic* markdown to Notion rich text array."""
+    """Convert inline **bold** / *italic* / [link](url) markdown to Notion rich text array."""
     parts = []
-    # Match **bold**, *italic*, or plain spans
-    for m in re.finditer(r"(\*\*(.+?)\*\*|\*(.+?)\*|([^*]+))", text):
+    for m in re.finditer(r"(\*\*(.+?)\*\*|\*(.+?)\*|\[([^\]]+)\]\(([^)]+)\)|([^*\[]+))", text):
         if m.group(2):
             parts.append(_rich_text(m.group(2), bold=True))
         elif m.group(3):
             parts.append(_rich_text(m.group(3), italic=True))
-        elif m.group(4):
-            parts.append(_rich_text(m.group(4)))
+        elif m.group(4) and m.group(5):
+            parts.append({"type": "text", "text": {"content": m.group(4)[:2000], "link": {"url": m.group(5)}}})
+        elif m.group(6):
+            parts.append(_rich_text(m.group(6)))
     return parts or [_rich_text(text)]
 
 
@@ -521,8 +544,16 @@ def markdown_to_notion_blocks(md_text: str, word_count: int, date_str: str) -> l
     return blocks
 
 
-def send_to_notion(md_path: Path, word_count: int) -> bool:
-    """Create a new Notion page with the report content."""
+def send_to_notion(md_path: Path, word_count: int, pdf_path: Path = None) -> bool:
+    """Create a new entry in the DB_English_Daily_Report Notion database.
+
+    Required database properties (must match exactly in Notion):
+      - Name  : Title  (the page title)
+      - Date  : Date
+      - Word Count : Number
+      - Reading Time (min) : Number
+      - PDF   : Files & media  (external URL — optional)
+    """
     try:
         from notion_client import Client
     except ImportError:
@@ -530,30 +561,52 @@ def send_to_notion(md_path: Path, word_count: int) -> bool:
         return False
 
     token = os.environ.get("NOTION_TOKEN")
-    parent_id = os.environ.get("NOTION_PAGE_ID")
-    if not token or not parent_id:
-        print("  Skipping Notion: NOTION_TOKEN or NOTION_PAGE_ID not set")
+    database_id = os.environ.get("NOTION_DATABASE_ID")
+    if not token or not database_id:
+        print("  Skipping Notion: NOTION_TOKEN or NOTION_DATABASE_ID not set")
         return False
 
     notion = Client(auth=token)
     now = datetime.now(JST)
     date_str = now.strftime("%Y-%m-%d")
     weekday = now.strftime("%A")
+    reading_time = round(word_count / 120)
 
     raw_md = md_path.read_text(encoding="utf-8")
     blocks = markdown_to_notion_blocks(raw_md, word_count, date_str)
 
-    # Create the page (Notion allows max 100 children per create call)
-    response = notion.pages.create(
-        parent={"page_id": parent_id.replace("-", "")},
-        icon={"type": "emoji", "emoji": "📖"},
-        properties={
-            "title": {
-                "title": [
-                    {"text": {"content": f"Daily English Report — {date_str} ({weekday})"}}
+    # Build database properties
+    properties: dict = {
+        "Name": {
+            "title": [
+                {"text": {"content": f"Daily English Report — {date_str} ({weekday})"}}
+            ]
+        },
+        "Date": {"date": {"start": date_str}},
+        "Word Count": {"number": word_count},
+        "Reading Time (min)": {"number": reading_time},
+    }
+
+    # Add PDF as external file link (URL becomes valid after git push in the same workflow)
+    if pdf_path:
+        github_repo = os.environ.get("GITHUB_REPOSITORY", "")
+        if github_repo:
+            pdf_url = f"https://raw.githubusercontent.com/{github_repo}/main/reports/{date_str}.pdf"
+            properties["PDF"] = {
+                "files": [
+                    {
+                        "name": f"english-report-{date_str}.pdf",
+                        "type": "external",
+                        "external": {"url": pdf_url},
+                    }
                 ]
             }
-        },
+
+    # Create the database entry (Notion allows max 100 children per create call)
+    response = notion.pages.create(
+        parent={"database_id": database_id.replace("-", "")},
+        icon={"type": "emoji", "emoji": "📖"},
+        properties=properties,
         children=blocks[:100],
     )
 
@@ -600,9 +653,9 @@ def main():
             print(f"✓ Email sent to {os.environ.get('RECIPIENT_EMAIL', os.environ.get('GMAIL_ADDRESS', '?'))}")
 
     if config.get("notion", True):
-        ok = send_to_notion(md_path, word_count)
+        ok = send_to_notion(md_path, word_count, pdf_path)
         if ok:
-            print("✓ Notion page created")
+            print("✓ Notion database entry created")
 
     # For GitHub Actions step output
     print(f"REPORT_PATH={md_path}")
