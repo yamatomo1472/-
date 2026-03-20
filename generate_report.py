@@ -161,9 +161,8 @@ def generate_report(config: dict) -> tuple[str, int]:
     print(f"  Requesting report for {today} (weekday={weekday})...")
 
     with client.messages.stream(
-        model="claude-opus-4-6",
+        model="claude-sonnet-4-6",
         max_tokens=8000,
-        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
         response = stream.get_final_message()
