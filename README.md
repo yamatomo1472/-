@@ -1,34 +1,62 @@
 # Daily English Reading Reports
 
-毎朝7時（JST）に自動生成される英語多読用レポート。
-目標：**3,600語 / 30分 / 120 WPM** — Markdown + **PDF** の2形式で保存。
+毎朝7時（JST）に英語レポートを自動生成してメール送信。
+目標：**3,600語 / 30分 / 120 WPM** — PDF添付メールで届く。
 
-## 仕組み
+---
 
-GitHub Actionsが毎朝22:00 UTC（= 07:00 JST）に起動し、`config.json`の興味分野を元にClaude claude-opus-4-6がレポートを生成。`reports/YYYY-MM-DD.md` と `reports/YYYY-MM-DD.pdf` として保存されます。
+## セットアップ（5分）
 
-## セットアップ（1分）
+### Step 1 — Gmail App Passwordを取得
 
-### 1. ANTHROPIC_API_KEY をシークレットに追加
+通常のGmailパスワードではなく「アプリパスワード」が必要です。
 
-GitHub リポジトリの **Settings → Secrets and variables → Actions** で：
+1. Googleアカウントにログイン → [myaccount.google.com/security](https://myaccount.google.com/security)
+2. **「2段階認証プロセス」** をオンにする（まだの場合）
+3. 同じページで **「アプリパスワード」** をクリック
+4. アプリ名を適当に入力（例：`Daily English Report`）→ **「作成」**
+5. 表示された **16文字のパスワード**（スペースなし）をコピーして保存
+
+### Step 2 — GitHub Secretsに4つ追加
+
+GitHubリポジトリの **Settings → Secrets and variables → Actions → New repository secret**
+
+| Name | Value | 説明 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | `sk-ant-...` | Claude APIキー |
+| `GMAIL_ADDRESS` | `you@gmail.com` | 送信元Gmailアドレス |
+| `GMAIL_APP_PASSWORD` | `xxxx xxxx xxxx xxxx` | Step 1で取得した16文字 |
+| `RECIPIENT_EMAIL` | `you@gmail.com` | 受信先（送信元と同じでOK） |
+
+> `RECIPIENT_EMAIL` は省略可。省略すると `GMAIL_ADDRESS` に送信されます。
+
+### Step 3 — 動作確認
+
+**Actions → Daily English Report → Run workflow** で手動実行。
+数分後にメールが届けば完了です。
+
+---
+
+## 毎日届くメールのイメージ
 
 ```
-Name:  ANTHROPIC_API_KEY
-Value: sk-ant-...
+件名: 📖 Daily English Report — 2026-03-21 (Saturday)
+
+Good morning!
+
+Today's English reading report is attached.
+
+📊 Stats
+  Date       : 2026-03-21 (Saturday)
+  Word count : 3,587 words
+  Reading time: 30 minutes at 120 WPM
+
+Open the PDF and enjoy your commute reading!
 ```
 
-### 2. 動作確認（任意）
+PDFが添付されているのでそのまま開いて読めます。
 
-**Actions → Daily English Report → Run workflow** から手動実行できます。
-
-### 3. ローカルで試す
-
-```bash
-pip install anthropic markdown weasyprint
-export ANTHROPIC_API_KEY="sk-ant-..."
-python generate_report.py
-```
+---
 
 ## レポート構成（毎日固定）
 
@@ -51,26 +79,32 @@ python generate_report.py
 | 木 | 世界・日本ニュース | ファイナンス動向 | ファイナンス基礎 |
 | 金 | 世界・日本ニュース | 副業ビジネス | リスクマネジメント |
 | 土 | 世界・日本ニュース | 日本不動産 | ファイナンス |
-| 日 | 世界・日本ニュース | AI・Claude Code | 週次ファイナンスまとめ |
+| 日 | 世界・日本ニュース | AI・Claude Code | 週次まとめ |
+
+---
 
 ## ファイル構成
 
 ```
-├── generate_report.py              # レポート生成スクリプト
-├── config.json                     # 興味分野の設定
+├── generate_report.py              # レポート生成・メール送信
+├── config.json                     # 興味分野・設定
 ├── reports/
 │   ├── 2026-03-20.md
-│   ├── 2026-03-20.pdf              ← これを電車で読む
+│   ├── 2026-03-20.pdf
 │   └── ...
 └── .github/workflows/
     └── daily_report.yml            # 毎朝7時JST自動実行
 ```
 
-## PDFの配布方法（任意）
+## ローカルで試す
 
-生成されたPDFはGitHubリポジトリの `reports/` フォルダに保存されます。
-スマホで読むには以下のいずれかが便利です：
+```bash
+pip install anthropic markdown weasyprint
 
-- **GitHub Mobile アプリ**でリポジトリを開く
-- **GitHub Releases** にPDFを添付するよう改造する（別途設定）
-- **Slack/Discord Bot** でPDFを自動送信する（別途設定）
+export ANTHROPIC_API_KEY="sk-ant-..."
+export GMAIL_ADDRESS="you@gmail.com"
+export GMAIL_APP_PASSWORD="xxxxxxxxxxxx"
+export RECIPIENT_EMAIL="you@gmail.com"
+
+python generate_report.py
+```
