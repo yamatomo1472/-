@@ -35,7 +35,7 @@ jobs:
             fonts-liberation
 
       - name: Install Python dependencies
-        run: pip install anthropic markdown weasyprint
+        run: pip install anthropic markdown weasyprint notion-client
 
       - name: Generate today's report
         env:
@@ -43,6 +43,8 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE_ID: ${{ secrets.NOTION_PAGE_ID }}
           TZ: Asia/Tokyo
         run: python generate_report.py
 

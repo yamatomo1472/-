@@ -17,5 +17,7 @@
   "level": "intermediate",
   "style": "magazine article",
   "output_dir": "reports",
-  "pdf": true
+  "pdf": true,
+  "notion": true,
+  "email": false
 }

@@ -1,60 +1,67 @@
 # Daily English Reading Reports
 
-毎朝7時（JST）に英語レポートを自動生成してメール送信。
-目標：**3,600語 / 30分 / 120 WPM** — PDF添付メールで届く。
+毎朝7時（JST）に英語レポートを自動生成して **Notion に投稿**。
+目標：**3,600語 / 30分 / 120 WPM**
 
 ---
 
 ## セットアップ（5分）
 
-### Step 1 — Gmail App Passwordを取得
+### Step 1 — Notion Integration を作成してトークンを取得
 
-通常のGmailパスワードではなく「アプリパスワード」が必要です。
+1. [notion.so/my-integrations](https://www.notion.so/my-integrations) を開く
+2. **「+ New integration」** をクリック
+3. 名前を入力（例：`Daily English Report`）→ **「Submit」**
+4. 表示された **Internal Integration Token**（`secret_...`）をコピーして保存
 
-1. Googleアカウントにログイン → [myaccount.google.com/security](https://myaccount.google.com/security)
-2. **「2段階認証プロセス」** をオンにする（まだの場合）
-3. 同じページで **「アプリパスワード」** をクリック
-4. アプリ名を適当に入力（例：`Daily English Report`）→ **「作成」**
-5. 表示された **16文字のパスワード**（スペースなし）をコピーして保存
+### Step 2 — 受け取るNotionページを用意して共有
 
-### Step 2 — GitHub Secretsに4つ追加
+1. Notionで新しいページを作成（例：`📖 Daily English Reports`）
+2. そのページを開き、右上の **「...」→「Connections」→「Connect to」** から Step 1 で作ったインテグレーションを選んで接続
+3. そのページの **URLからページIDを取得**
+
+```
+https://www.notion.so/Your-Page-Title-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                      これがページID（32文字）
+```
+
+### Step 3 — GitHub Secretsに追加
 
 GitHubリポジトリの **Settings → Secrets and variables → Actions → New repository secret**
 
-| Name | Value | 説明 |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | `sk-ant-...` | Claude APIキー |
-| `GMAIL_ADDRESS` | `you@gmail.com` | 送信元Gmailアドレス |
-| `GMAIL_APP_PASSWORD` | `xxxx xxxx xxxx xxxx` | Step 1で取得した16文字 |
-| `RECIPIENT_EMAIL` | `you@gmail.com` | 受信先（送信元と同じでOK） |
+| Name | Value |
+|---|---|
+| `ANTHROPIC_API_KEY` | `sk-ant-...` |
+| `NOTION_TOKEN` | `secret_...`（Step 1のトークン） |
+| `NOTION_PAGE_ID` | `xxxxxxxx...`（Step 2の32文字ID） |
 
-> `RECIPIENT_EMAIL` は省略可。省略すると `GMAIL_ADDRESS` に送信されます。
-
-### Step 3 — 動作確認
+### Step 4 — 動作確認
 
 **Actions → Daily English Report → Run workflow** で手動実行。
-数分後にメールが届けば完了です。
+数分後にNotionページが作成されれば完了です。
 
 ---
 
-## 毎日届くメールのイメージ
+## Notionに作られるページのイメージ
 
 ```
-件名: 📖 Daily English Report — 2026-03-21 (Saturday)
+📖 Daily English Report — 2026-03-21 (Saturday)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📖  3,587 words  |  30 min at 120 WPM  |  2026-03-21
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Good morning!
+## 📰 Japan's Startup Scene Breaks Records as...
 
-Today's English reading report is attached.
-
-📊 Stats
-  Date       : 2026-03-21 (Saturday)
-  Word count : 3,587 words
-  Reading time: 30 minutes at 120 WPM
-
-Open the PDF and enjoy your commute reading!
+...
+## Main Story: ...
+## Second Story: ...
+## ⚡ Quick Takes
+## 📖 Word of the Day
 ```
 
-PDFが添付されているのでそのまま開いて読めます。
+すべてのセクションがNotionブロックとして展開されるので、
+スマホのNotionアプリから快適に読めます。
 
 ---
 
@@ -83,28 +90,39 @@ PDFが添付されているのでそのまま開いて読めます。
 
 ---
 
-## ファイル構成
+## 設定（config.json）
 
+```json
+{
+  "notion": true,   // Notionに投稿する
+  "email": false,   // メール送信（Gmail設定が必要）
+  "pdf": true       // PDFもreports/に保存する
+}
 ```
-├── generate_report.py              # レポート生成・メール送信
-├── config.json                     # 興味分野・設定
-├── reports/
-│   ├── 2026-03-20.md
-│   ├── 2026-03-20.pdf
-│   └── ...
-└── .github/workflows/
-    └── daily_report.yml            # 毎朝7時JST自動実行
-```
+
+メールも併用したい場合は `"email": true` にして、
+GitHubSecretsに `GMAIL_ADDRESS` / `GMAIL_APP_PASSWORD` / `RECIPIENT_EMAIL` を追加してください。
+
+---
 
 ## ローカルで試す
 
 ```bash
-pip install anthropic markdown weasyprint
+pip install anthropic markdown weasyprint notion-client
 
 export ANTHROPIC_API_KEY="sk-ant-..."
-export GMAIL_ADDRESS="you@gmail.com"
-export GMAIL_APP_PASSWORD="xxxxxxxxxxxx"
-export RECIPIENT_EMAIL="you@gmail.com"
+export NOTION_TOKEN="secret_..."
+export NOTION_PAGE_ID="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 python generate_report.py
+```
+
+## ファイル構成
+
+```
+├── generate_report.py              # レポート生成・Notion投稿・メール送信
+├── config.json                     # 興味分野・出力先設定
+├── reports/                        # MarkdownとPDFのバックアップ
+└── .github/workflows/
+    └── daily_report.yml            # 毎朝7時JST自動実行
 ```
