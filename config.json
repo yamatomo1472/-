@@ -1,0 +1,23 @@
+{
+  "interests": [
+    "World and Japan news (citing reliable sources like Nikkei, Reuters, Bloomberg)",
+    "New business opportunities and emerging markets",
+    "Side business and freelance opportunities",
+    "American startup ecosystem and venture capital",
+    "Commodity markets (oil, gold, agriculture, metals)",
+    "Latest AI tools and what they can do",
+    "Claude Code capabilities and real-world use cases",
+    "Financial market trends and macro outlook",
+    "How to read financial news and basic finance concepts",
+    "Risk management trends and frameworks",
+    "Geopolitical risk analysis",
+    "Japan real estate market"
+  ],
+  "exclude_topics": [],
+  "level": "intermediate",
+  "style": "magazine article",
+  "output_dir": "reports",
+  "pdf": true,
+  "notion": true,
+  "email": false
+}
