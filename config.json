@@ -1,0 +1,10 @@
+{
+  "interests": [
+    "TODO: Add your interests here"
+  ],
+  "exclude_topics": [],
+  "level": "intermediate",
+  "style": "magazine article",
+  "output_dir": "reports",
+  "notes": "Interests will be provided by the user. Examples: technology, AI, business, science, history, sports, food, travel, etc."
+}

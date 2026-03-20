@@ -1,0 +1,40 @@
+name: Daily English Report
+
+on:
+  schedule:
+    # 22:00 UTC = 07:00 JST (UTC+9)
+    - cron: "0 22 * * *"
+  workflow_dispatch: # Allow manual trigger for testing
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install anthropic
+
+      - name: Generate today's report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TZ: Asia/Tokyo
+        run: python generate_report.py
+
+      - name: Commit and push report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          DATE=$(date -u +"%Y-%m-%d" --date="9 hours")
+          git add reports/
+          git diff --cached --quiet || git commit -m "report: daily English reading ${DATE}"
+          git push
