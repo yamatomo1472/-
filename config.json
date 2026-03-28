@@ -19,5 +19,10 @@
   "output_dir": "reports",
   "pdf": true,
   "notion": true,
-  "email": false
+  "email": false,
+  "speaking_bot": {
+    "diary_days": 7,
+    "max_tokens": 150,
+    "model": "claude-sonnet-4-6"
+  }
 }
