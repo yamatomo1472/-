@@ -10,6 +10,7 @@ import json
 import os
 import re
 import smtplib
+import socket
 import sys
 from datetime import datetime, timezone, timedelta
 from email.mime.application import MIMEApplication
@@ -19,6 +20,112 @@ from pathlib import Path
 
 JST = timezone(timedelta(hours=9))
 TARGET_WORDS = 3600  # 30 min × 120 WPM
+
+# RSS feeds per topic index — multiple sources per topic for variety
+TOPIC_RSS: dict[int, list[str]] = {
+    0: [  # World & Japan news
+        "https://feeds.reuters.com/reuters/topNews",
+        "https://www3.nhk.or.jp/nhkworld/en/news/feeds/",
+        "https://www.japantimes.co.jp/feed/",
+        "https://feeds.bbci.co.uk/news/world/rss.xml",
+    ],
+    1: [  # New business opportunities
+        "https://feeds.reuters.com/reuters/businessNews",
+        "https://techcrunch.com/feed/",
+        "https://hbr.org/the-latest",
+    ],
+    2: [  # Side business / freelance
+        "https://news.ycombinator.com/rss",
+        "https://techcrunch.com/feed/",
+    ],
+    3: [  # US Startups & VC
+        "https://techcrunch.com/feed/",
+        "https://venturebeat.com/feed/",
+        "https://news.ycombinator.com/rss",
+    ],
+    4: [  # Commodities: crude oil, LNG, copper, coal, iron ore
+        "https://oilprice.com/rss/main",
+        "https://feeds.reuters.com/reuters/businessNews",
+        "https://www.mining.com/feed/",
+    ],
+    5: [  # Latest AI tools
+        "https://venturebeat.com/ai/feed/",
+        "https://www.theverge.com/rss/index.xml",
+        "https://techcrunch.com/feed/",
+    ],
+    6: [  # Claude Code / developer tools
+        "https://news.ycombinator.com/rss",
+        "https://www.theverge.com/rss/index.xml",
+        "https://github.blog/feed/",
+    ],
+    7: [  # Financial market trends
+        "https://feeds.reuters.com/reuters/businessNews",
+        "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+        "https://feeds.marketwatch.com/marketwatch/topstories/",
+    ],
+    8: [  # How to read financial news / finance basics
+        "https://feeds.reuters.com/reuters/businessNews",
+        "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+    ],
+    9: [  # Risk management trends
+        "https://feeds.reuters.com/reuters/topNews",
+        "https://feeds.reuters.com/reuters/businessNews",
+    ],
+    10: [  # Geopolitical risk
+        "https://feeds.reuters.com/reuters/topNews",
+        "https://feeds.bbci.co.uk/news/world/rss.xml",
+        "https://www.japantimes.co.jp/feed/",
+    ],
+    11: [  # Japan real estate
+        "https://www.japantimes.co.jp/feed/",
+        "https://www3.nhk.or.jp/nhkworld/en/news/feeds/",
+    ],
+}
+
+
+def fetch_news_context(topic_indices: list[int], max_per_feed: int = 6) -> str:
+    """Fetch real RSS headlines for today's topics to ground Claude's report in actual current news."""
+    try:
+        import feedparser
+    except ImportError:
+        print("  feedparser not installed — skipping RSS fetch", file=sys.stderr)
+        return ""
+
+    seen = set()
+    lines: list[str] = []
+    original_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(8)
+
+    try:
+        for idx in topic_indices:
+            for feed_url in TOPIC_RSS.get(idx, []):
+                try:
+                    feed = feedparser.parse(feed_url)
+                    count = 0
+                    for entry in feed.entries:
+                        if count >= max_per_feed:
+                            break
+                        url = entry.get("link", "")
+                        if url in seen:
+                            continue
+                        seen.add(url)
+                        title = entry.get("title", "").strip()
+                        summary = re.sub(r"<[^>]+>", "", entry.get("summary", ""))[:180].strip()
+                        published = entry.get("published", "")[:16]
+                        source = feed.feed.get("title", feed_url.split("/")[2])
+                        lines.append(f"[{source}] {title} ({published})\n  {summary}")
+                        count += 1
+                except Exception:
+                    continue
+    finally:
+        socket.setdefaulttimeout(original_timeout)
+
+    if not lines:
+        return ""
+
+    header = "=== TODAY'S REAL NEWS (use these actual stories as the foundation of your report) ===\n"
+    return header + "\n\n".join(lines)
+
 
 # Topics to rotate through (indices into config["interests"])
 # Each day a subset is featured based on day-of-week
@@ -43,7 +150,7 @@ def count_words(text: str) -> int:
     return len(text.split())
 
 
-def build_prompt(config: dict, today: str, weekday: int) -> str:
+def build_prompt(config: dict, today: str, weekday: int, news_context: str = "") -> str:
     all_interests = config.get("interests", [])
     level = config.get("level", "intermediate")
     featured_indices = DAILY_TOPIC_ROTATION.get(weekday, [0, 1, 4])
@@ -56,9 +163,19 @@ def build_prompt(config: dict, today: str, weekday: int) -> str:
 
     quick_take_topics = ", ".join(quick_topics[:3]) if quick_topics else "technology, finance, Japan economy"
 
+    news_section = f"""
+{news_context}
+
+IMPORTANT: Base your report on the real headlines above. Choose the most interesting and relevant stories
+from the feed. Do NOT default to generic or evergreen content — anchor every section in specific events,
+companies, numbers, and quotes from these actual news items. Different feeds arrive each day, so your
+report will naturally vary day-to-day.
+
+""" if news_context else ""
+
     return f"""You are writing a daily English reading report for a Japanese professional learning English.
 Today's date: {today}
-
+{news_section}
 MISSION: Create a single, cohesive report of approximately {TARGET_WORDS} words.
 The reader has exactly 30 minutes on the train and reads at 120 WPM.
 Word count accuracy is critical — being too short (under 3,400) or too long (over 3,800) wastes their study time.
@@ -179,7 +296,13 @@ def generate_report(config: dict) -> tuple[str, int]:
     today = now.strftime("%B %d, %Y")
     weekday = now.weekday()  # 0=Monday
 
-    prompt = build_prompt(config, today, weekday)
+    featured_indices = DAILY_TOPIC_ROTATION.get(weekday, [0, 1, 4])
+    print(f"  Fetching RSS feeds for topics {featured_indices}...")
+    news_context = fetch_news_context(featured_indices)
+    feed_lines = news_context.count("\n[") + (1 if news_context.startswith("[") else 0)
+    print(f"  Fetched {feed_lines} news items from RSS")
+
+    prompt = build_prompt(config, today, weekday, news_context)
     print(f"  Requesting report for {today} (weekday={weekday})...")
 
     with client.messages.stream(

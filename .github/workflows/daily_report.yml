@@ -35,7 +35,7 @@ jobs:
             fonts-liberation
 
       - name: Install Python dependencies
-        run: pip install anthropic markdown weasyprint notion-client
+        run: pip install anthropic markdown weasyprint notion-client feedparser
 
       - name: Generate today's report
         env:
